@@ -1,15 +1,16 @@
 package spotify;
 
 import Nodos.ManejoArchivos;
-import Nodos.MusicNode;
 import Nodos.MusicNodeList;
 import Nodos.SongData;
+
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.io.File;
 import java.io.IOException;
+
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
@@ -25,12 +26,12 @@ public class SongGUI extends BaseFrame {
 
     private JButton btnPlay, btnStop, btnPause, btnSelect, btnAdd, btnRemove;
 
-    //clases
+    private AudioPlayer player;
     private ManejoArchivos manejoArchivos;
     private MusicNodeList musicNodeList;
     private SongData songData;
-    private AudioPlayer player;
     private SongData currentSong;
+    private String loadedPath;
 
     @Override
     protected void initComponents() {
@@ -46,10 +47,9 @@ public class SongGUI extends BaseFrame {
             JOptionPane.showMessageDialog(this, "Error al cargar canciones: " + e.getMessage());
         }
 
-        // Panel principal
         JPanel panelPrincipal = new JPanel(new BorderLayout());
+        setContentPane(panelPrincipal);
 
-        //resto de paneles
         JPanel panelNorte = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 15));
         panelNorte.setPreferredSize(new Dimension(0, 60));
         panelNorte.setOpaque(false);
@@ -63,31 +63,25 @@ public class SongGUI extends BaseFrame {
         panelPrincipal.add(panelCentro, BorderLayout.CENTER);
 
         btnPlay = crearBoton("Play", 240, 270, 100, 40);
-        panelCentro.add(btnPlay);
-
         btnStop = crearBoton("Stop", 380, 270, 100, 40);
-        panelCentro.add(btnStop);
-
         btnPause = crearBoton("Pause", 110, 270, 100, 40);
-        panelCentro.add(btnPause);
-
         btnSelect = crearBoton("Select", 240, 340, 100, 40);
-        panelCentro.add(btnSelect);
-
         btnAdd = crearBoton("Add", 380, 340, 100, 40);
-        panelCentro.add(btnAdd);
-
         btnRemove = crearBoton("Remove", 110, 340, 100, 40);
+
+        panelCentro.add(btnPlay);
+        panelCentro.add(btnStop);
+        panelCentro.add(btnPause);
+        panelCentro.add(btnSelect);
+        panelCentro.add(btnAdd);
         panelCentro.add(btnRemove);
 
         btnPlay.addActionListener(e -> playMusic());
-        btnStop.addActionListener(e -> stopMusic());
-        btnPause.addActionListener(e -> pauseMusic());
+        btnStop.addActionListener(e -> pausarMusica());
+        btnPause.addActionListener(e -> detenerMusica());
         btnSelect.addActionListener(e -> selectMusic());
         btnAdd.addActionListener(e -> addMusic());
         btnRemove.addActionListener(e -> removeMusic());
-
-        setContentPane(panelPrincipal);
     }
 
     private void playMusic() {
@@ -99,27 +93,37 @@ public class SongGUI extends BaseFrame {
                     return;
                 }
             }
-            if (!player.isPlaying()) {
-                player.load(currentSong.getPath());
+
+            File archivo = new File(currentSong.getPath());
+            if (!archivo.exists()) {
+                JOptionPane.showMessageDialog(this, "El archivo no existe: " + currentSong.getPath());
+                return;
             }
-            player.play();
+
+            if (loadedPath == null || !loadedPath.equals(currentSong.getPath())) {
+                player.pausar();
+                player.cargar(currentSong.getPath());
+                loadedPath = currentSong.getPath();
+            }
+
+            player.reproducir();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Error al reproducir: " + e.getMessage());
         }
     }
 
-    private void stopMusic() {
-        player.stop();
+    private void detenerMusica() {
+        player.pausar();
         currentSong = null;
+        loadedPath = null;
     }
 
-    private void pauseMusic() {
+    private void pausarMusica() {
         if (player == null || !player.isPlaying()) {
             JOptionPane.showMessageDialog(this, "No hay música reproduciéndose.");
             return;
         }
-        player.pause();
-        JOptionPane.showMessageDialog(this, "Canción en pausa.");
+        player.pausar();
     }
 
     private void selectMusic() {
@@ -142,25 +146,28 @@ public class SongGUI extends BaseFrame {
             return;
         }
 
-        player.stop();
+        player.pausar();
         currentSong = encontrada;
         songData = encontrada;
+        loadedPath = null;
+
         JOptionPane.showMessageDialog(this, "Canción seleccionada: " + encontrada.getNombreCancion());
     }
 
     private void addMusic() {
         JFileChooser fcAudio = new JFileChooser();
         fcAudio.setDialogTitle("Favor seleccione un MP3:");
-        int resultadoAudio = fcAudio.showOpenDialog(this);
-        if (resultadoAudio != JFileChooser.APPROVE_OPTION) {
+        int audioResult = fcAudio.showOpenDialog(this);
+        if (audioResult != JFileChooser.APPROVE_OPTION) {
             return;
         }
+
         File audio = fcAudio.getSelectedFile();
 
         JFileChooser fcImg = new JFileChooser();
         fcImg.setDialogTitle("Selecciona una imagen (opcional)");
-        int resultadoImg = fcImg.showOpenDialog(this);
-        String imagePath = (resultadoImg == JFileChooser.APPROVE_OPTION)
+        int imageResult = fcImg.showOpenDialog(this);
+        String imagePath = (imageResult == JFileChooser.APPROVE_OPTION)
                 ? fcImg.getSelectedFile().getAbsolutePath()
                 : "";
 
@@ -168,6 +175,7 @@ public class SongGUI extends BaseFrame {
         if (codeString == null) {
             return;
         }
+
         int code;
         try {
             code = Integer.parseInt(codeString);
@@ -176,14 +184,30 @@ public class SongGUI extends BaseFrame {
             return;
         }
 
+        if (musicNodeList.search(code) != null) {
+            JOptionPane.showMessageDialog(this, "Ese código ya existe en la lista.");
+            return;
+        }
+        try {
+            if (manejoArchivos.searchSong(code)) {
+                JOptionPane.showMessageDialog(this, "Ese código ya existe en el archivo.");
+                return;
+            }
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Error verificando código: " + ex.getMessage());
+            return;
+        }
+
         String nombre = JOptionPane.showInputDialog(this, "Nombre de la canción:", audio.getName());
         if (nombre == null) {
             return;
         }
+
         String artista = JOptionPane.showInputDialog(this, "Artista:", "Desconocido");
         if (artista == null) {
             return;
         }
+
         String genero = JOptionPane.showInputDialog(this, "Género:", "N/A");
         if (genero == null) {
             return;
@@ -191,13 +215,14 @@ public class SongGUI extends BaseFrame {
 
         double duracion = 0.0;
 
-        SongData nuevaCancion = new SongData(code, nombre, artista, duracion, audio.getAbsolutePath(),
-                genero, imagePath);
+        SongData nuevaCancion = new SongData(
+                code, nombre, artista, duracion, audio.getAbsolutePath(), genero, imagePath
+        );
 
         try {
             manejoArchivos.addSong(nuevaCancion);
             musicNodeList.add(nuevaCancion);
-            songData = nuevaCancion;
+            songData = nuevaCancion; // dejas como "seleccionada" la última agregada
             JOptionPane.showMessageDialog(this, "Canción agregada con éxito.");
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this, "Error al guardar la canción: " + e.getMessage());
@@ -217,9 +242,9 @@ public class SongGUI extends BaseFrame {
             JOptionPane.showMessageDialog(this, "El código debe ser un número.");
             return;
         }
-        
+
         if (currentSong != null && currentSong.getCode() == code) {
-            stopMusic();
+            detenerMusica();
         }
 
         try {

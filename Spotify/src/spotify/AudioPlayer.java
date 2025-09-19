@@ -3,67 +3,91 @@ package spotify;
 import javazoom.jl.player.advanced.AdvancedPlayer;
 import javazoom.jl.player.advanced.PlaybackEvent;
 import javazoom.jl.player.advanced.PlaybackListener;
+
 import java.io.FileInputStream;
 
 public class AudioPlayer {
 
     private AdvancedPlayer player;
-    private Thread playThread;
-    private String currentPath;
-    private int pausedFrame = 0;
-    private int lastFrame = 0;
-    private boolean playing = false;
+    private Thread hilo;
+    private String rutaCancion;
+    private int framePausado = 0;
+    private int frameUltimo = 0;
+    private boolean reproduciendo = false;
 
-    public void load(String path) {
-        stop();
-        currentPath = path;
-        pausedFrame = 0;
-        lastFrame = 0;
+    public void cargar(String ruta) {
+        pausar();
+        rutaCancion = ruta;
+        framePausado = 0;
+        frameUltimo = 0;
     }
 
-    public void play() {
-        if (currentPath == null || playing) {
+    public void reproducir() {
+        if (rutaCancion == null || reproduciendo) {
             return;
         }
 
-        playing = true;
-        playThread = new Thread(() -> {
-            try (FileInputStream fis = new FileInputStream(currentPath)) {
+        reproduciendo = true;
+        hilo = new Thread(() -> {
+            try (FileInputStream fis = new FileInputStream(rutaCancion)) {
                 player = new AdvancedPlayer(fis);
                 player.setPlayBackListener(new PlaybackListener() {
                     @Override
                     public void playbackFinished(PlaybackEvent evt) {
-                        lastFrame = evt.getFrame();
-                        playing = false;
+                        frameUltimo = evt.getFrame();
+                        reproduciendo = false;
                     }
                 });
-                player.play(pausedFrame, Integer.MAX_VALUE);
+                player.play(framePausado, Integer.MAX_VALUE);
             } catch (Exception e) {
-                e.getMessage();
+                e.printStackTrace();
             } finally {
-                playing = false;
+                reproduciendo = false;
                 player = null;
+                hilo = null;
             }
-        });
-        playThread.start();
+        }, "hilo-reproductor");
+        hilo.start();
     }
 
-    public void pause() {
-        if (!playing || player == null) {
+    public void detner() {
+        if (!reproduciendo || player == null) {
             return;
         }
-        pausedFrame = Math.max(lastFrame, pausedFrame);
-        player.close();
-        playing = false;
+        framePausado = Math.max(frameUltimo, framePausado);
+        try {
+            player.close();
+        } catch (Exception ignored) {
+        }
+        esperarHilo();
+        reproduciendo = false;
+        player = null;
     }
 
-    public void stop() {
-        playing = false;
-        pausedFrame = 0;
-        lastFrame = 0;
+    public void pausar() {
+        try {
+            if (player != null) {
+                player.close();
+            }
+        } catch (Exception ignored) {
+        }
+        esperarHilo();
+        reproduciendo = false;
+        framePausado = 0;
+        frameUltimo = 0;
+        player = null;
     }
 
     public boolean isPlaying() {
-        return playing;
+        return reproduciendo;
+    }
+
+    private void esperarHilo() {
+        try {
+            if (hilo != null && hilo.isAlive()) {
+                hilo.join(120);
+            }
+        } catch (InterruptedException ignored) {
+        }
     }
 }
