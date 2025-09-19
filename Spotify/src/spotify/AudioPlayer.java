@@ -15,13 +15,6 @@ public class AudioPlayer {
     private int frameUltimo = 0;
     private boolean reproduciendo = false;
 
-    public void cargar(String ruta) {
-        pausar();
-        rutaCancion = ruta;
-        framePausado = 0;
-        frameUltimo = 0;
-    }
-
     public void reproducir() {
         if (rutaCancion == null || reproduciendo) {
             return;
@@ -40,7 +33,7 @@ public class AudioPlayer {
                 });
                 player.play(framePausado, Integer.MAX_VALUE);
             } catch (Exception e) {
-                e.printStackTrace();
+                e.getMessage();
             } finally {
                 reproduciendo = false;
                 player = null;
@@ -50,28 +43,34 @@ public class AudioPlayer {
         hilo.start();
     }
 
-    public void detner() {
+    public void cargar(String ruta) {
+        detener();
+        rutaCancion = ruta;
+        framePausado = 0;
+        frameUltimo = 0;
+    }
+
+    public void pausar() {
         if (!reproduciendo || player == null) {
             return;
         }
-        framePausado = Math.max(frameUltimo, framePausado);
+
         try {
             player.close();
         } catch (Exception ignored) {
         }
-        esperarHilo();
+        framePausado = frameUltimo;
         reproduciendo = false;
         player = null;
     }
 
-    public void pausar() {
+    public void detener() {
         try {
             if (player != null) {
                 player.close();
             }
         } catch (Exception ignored) {
         }
-        esperarHilo();
         reproduciendo = false;
         framePausado = 0;
         frameUltimo = 0;
@@ -80,14 +79,5 @@ public class AudioPlayer {
 
     public boolean isPlaying() {
         return reproduciendo;
-    }
-
-    private void esperarHilo() {
-        try {
-            if (hilo != null && hilo.isAlive()) {
-                hilo.join(120);
-            }
-        } catch (InterruptedException ignored) {
-        }
     }
 }
